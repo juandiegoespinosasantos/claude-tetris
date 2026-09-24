@@ -1,0 +1,85 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  claude-issue-triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-issue-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are triaging GitHub issue #${{ github.event.issue.number }} in the
+            repository ${{ github.repository }} (a vanilla JS Tetris game with no
+            build tooling: index.html, style.css, game.js).
+
+            Issue title: ${{ github.event.issue.title }}
+            Issue body:
+            ${{ github.event.issue.body }}
+
+            Do the following, in order:
+
+            1. Read CLAUDE.md for the project's architecture (board model,
+               piece rotation via rotateCW, collision via collide, wall kicks
+               via tryRotate, the loop/lockPiece/spawn/clearLines/ghostY
+               control flow, scoring/leveling constants).
+            2. Read whichever of game.js, index.html, or style.css are
+               relevant to the reported problem, to ground your diagnosis in
+               the actual code (cite real function/variable names and, where
+               possible, approximate line numbers).
+            3. Choose one or more appropriate labels for this issue from
+               EXACTLY this set (do not invent new labels, and never apply
+               "wontfix" - that is a maintainer-only judgment call):
+               bug, enhancement, documentation, question, accessibility,
+               duplicate, invalid, help wanted, good first issue.
+            4. Apply the chosen label(s) with:
+               gh issue edit ${{ github.event.issue.number }} --add-label "<label1>" --add-label "<label2>"
+               (only add labels that aren't already on the issue; never
+               remove existing labels, and never remove or touch "wontfix"
+               if present.)
+            5. Post or update a triage comment. First try to update your own
+               previous triage comment (if this issue was edited and you
+               already commented before) with:
+               gh issue comment ${{ github.event.issue.number }} --edit-last --body "<BODY>"
+               If that command fails (no previous comment by you exists yet),
+               fall back to:
+               gh issue comment ${{ github.event.issue.number }} --body "<BODY>"
+
+               <BODY> must be a structured Markdown comment starting with the
+               heading "## 🤖 Automated Triage" and containing these sections:
+               - **Summary**: one or two sentences restating the problem in
+                 your own words.
+               - **Likely root cause**: your best diagnosis of what in the
+                 codebase is causing this, naming specific files and
+                 functions/variables from game.js, index.html, or style.css
+                 (e.g. "rotateCW in game.js", "the #board canvas sizing in
+                 index.html"). If the issue is a feature request or question
+                 rather than a bug, describe the relevant area of the code
+                 that would need to change instead.
+               - **Suggested next steps**: a short bullet list of concrete
+                 next actions for whoever picks this up (what to inspect,
+                 what to try, what to verify manually - note there is no
+                 automated test suite in this repo).
+
+            Do not modify any files in the repository. Do not open a pull
+            request. Your only actions should be the `gh issue edit` and
+            `gh issue comment` commands above.
+          claude_args: '--allowedTools "Read,Grep,Glob,Bash(gh issue *)"'
+          # If gh commands fail with an auth error, add to this step:
+          #   env:
+          #     GH_TOKEN: ${{ github.token }}
